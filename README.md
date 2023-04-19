@@ -25,3 +25,7 @@ pip install -r requirements/requirements.txt
 
 pip install -r requirements/requirements-atari.txt
 
+*If using a newer GPU (30 or 40 series):*
+
+pip install "torch==1.12.1" --upgrade --extra-index-url https://download.pytorch.org/whl/cu113
+

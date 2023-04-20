@@ -219,10 +219,10 @@ if __name__ == "__main__":
                 with torch.no_grad():
                     ##Implement Double Deep Q Learning
                     next_state_Q = q_network(data.next_observations)
-                    best_action = next_state_Q.argmax(dim=1)
-                    next_Q = target_network(data.next_observations)[:, best_action]
+                    best_actions = next_state_Q.argmax(dim=1, keepdims=True)
+                    next_Q = target_network(data.next_observations).gather(1, best_actions).squeeze()
                     td_target = data.rewards.flatten() + args.gamma * next_Q * (1 - data.dones.flatten())
-                    # target_max, _ = target_network(data.next_observations).max(dim=1)
+                    #target_max, _ = target_network(data.next_observations).max(dim=1)
                     # td_target = data.rewards.flatten() + args.gamma * target_max * (1 - data.dones.flatten())
                 old_val = q_network(data.observations).gather(1, data.actions).squeeze()
                 loss = F.mse_loss(td_target, old_val)

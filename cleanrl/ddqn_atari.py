@@ -135,7 +135,6 @@ if __name__ == "__main__":
     run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
     if args.track:
         import wandb
-
         wandb.init(
             project=args.wandb_project_name,
             entity=args.wandb_entity,
@@ -167,6 +166,8 @@ if __name__ == "__main__":
     q_network = QNetwork(envs).to(device)
     optimizer = optim.Adam(q_network.parameters(), lr=args.learning_rate)
     target_network = QNetwork(envs).to(device)
+    ## LOAD CHECKPOINT IF DESIRED
+    #q_network.load_state_dict(torch.load('ddqn_atari.cleanrl_model'))
     target_network.load_state_dict(q_network.state_dict())
 
     rb = ReplayBuffer(
@@ -246,23 +247,27 @@ if __name__ == "__main__":
                     )
 
     if args.save_model:
-        model_path = f"runs/{run_name}/{args.exp_name}.cleanrl_model"
-        torch.save(q_network.state_dict(), model_path)
-        print(f"model saved to {model_path}")
-        from cleanrl_utils.evals.dqn_eval import evaluate
+        if args.track:
+            torch.save(q_network.state_dict(), f"{wandb.run.dir}/q_network.pt")
+            wandb.save(f"{wandb.run.dir}/q_network.pt", policy="now")
+        else:
+            model_path = f"runs/{run_name}/{args.exp_name}.cleanrl_model"
+            torch.save(q_network.state_dict(), model_path)
+            print(f"model saved to {model_path}")
+            from cleanrl_utils.evals.dqn_eval import evaluate
 
-        episodic_returns = evaluate(
-            model_path,
-            make_env,
-            args.env_id,
-            eval_episodes=10,
-            run_name=f"{run_name}-eval",
-            Model=QNetwork,
-            device=device,
-            epsilon=0.05,
-        )
-        for idx, episodic_return in enumerate(episodic_returns):
-            writer.add_scalar("eval/episodic_return", episodic_return, idx)
+            episodic_returns = evaluate(
+                model_path,
+                make_env,
+                args.env_id,
+                eval_episodes=10,
+                run_name=f"{run_name}-eval",
+                Model=QNetwork,
+                device=device,
+                epsilon=0.05,
+            )
+            for idx, episodic_return in enumerate(episodic_returns):
+                writer.add_scalar("eval/episodic_return", episodic_return, idx)
 
         if args.upload_model:
             from cleanrl_utils.huggingface import push_to_hub

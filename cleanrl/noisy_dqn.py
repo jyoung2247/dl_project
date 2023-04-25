@@ -99,10 +99,16 @@ class QNetwork(nn.Module):
             nn.Linear(120, 84),
             nn.ReLU()
         )
-        self.noisy_layer = NoisyLayer(84, env.single_action_space.n)
+        self.fc = nn.Sequential(
+            NoisyLayer(84, 32),
+            nn.ReLU(),
+            NoisyLayer(32, env.single_action_space.n)
+        )
+        # self.noisy_layer1 = NoisyLayer(84, 32)
+        # self.noisy_layer2 = NoisyLayer(32, env.single_action_space.n)
 
     def forward(self, x):
-        return self.noisy_layer(self.base_network(x))
+        return self.fc(self.base_network(x))
     
 class NoisyLayer(nn.Linear):
     def __init__(self, in_features, out_features, sigma_init=0.017):
@@ -181,12 +187,14 @@ if __name__ == "__main__":
     obs = envs.reset()
     for global_step in range(args.total_timesteps):
         # ALGO LOGIC: put action logic here
-        epsilon = linear_schedule(args.start_e, args.end_e, args.exploration_fraction * args.total_timesteps, global_step)
-        if random.random() < epsilon:
-            actions = np.array([envs.single_action_space.sample() for _ in range(envs.num_envs)])
-        else:
-            q_values = q_network(torch.Tensor(obs).to(device))
-            actions = torch.argmax(q_values, dim=1).cpu().numpy()
+        # epsilon = linear_schedule(args.start_e, args.end_e, args.exploration_fraction * args.total_timesteps, global_step)
+        # if random.random() < epsilon:
+        #     actions = np.array([envs.single_action_space.sample() for _ in range(envs.num_envs)])
+        # else:
+        #     q_values = q_network(torch.Tensor(obs).to(device))
+        #     actions = torch.argmax(q_values, dim=1).cpu().numpy()
+        q_values = q_network(torch.Tensor(obs).to(device))
+        actions = torch.argmax(q_values, dim=1).cpu().numpy()
 
         # TRY NOT TO MODIFY: execute the game and log data.
         next_obs, rewards, dones, infos = envs.step(actions)
@@ -197,7 +205,7 @@ if __name__ == "__main__":
                 print(f"global_step={global_step}, episodic_return={info['episode']['r']}")
                 writer.add_scalar("charts/episodic_return", info["episode"]["r"], global_step)
                 writer.add_scalar("charts/episodic_length", info["episode"]["l"], global_step)
-                writer.add_scalar("charts/epsilon", epsilon, global_step)
+                # writer.add_scalar("charts/epsilon", epsilon, global_step)
                 break
 
         # TRY NOT TO MODIFY: save data to reply buffer; handle `terminal_observation`

@@ -129,6 +129,11 @@ class QNetwork(nn.Module):
     def forward(self, x):
         return self.fc(self.base_network(x / 255.0))
     
+#Remove linear_schedule since noisy DQN doesn't utilize it
+# def linear_schedule(start_e: float, end_e: float, duration: int, t: int):
+#     slope = (end_e - start_e) / duration
+#     return max(slope * t + start_e, end_e)
+    
 class NoisyLayer(nn.Linear):
     def __init__(self, in_features, out_features, sigma_init=0.017):
         super().__init__(in_features, out_features)

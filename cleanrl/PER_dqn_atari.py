@@ -168,18 +168,10 @@ if __name__ == "__main__":
     target_network = QNetwork(envs).to(device)
     target_network.load_state_dict(q_network.state_dict())
 
-    # rb = ReplayBuffer(
-    #     args.buffer_size,
-    #     envs.single_observation_space,
-    #     envs.single_action_space,
-    #     device,
-    #     optimize_memory_usage=True,
-    #     handle_timeout_termination=True,
-    # )
+    #Initialize PRB
     rb = PrioritizedReplayBuffer(
         args.buffer_size,
         0.5,
-        0.4,
         envs.single_observation_space,
         envs.single_action_space,
         device
@@ -214,8 +206,9 @@ if __name__ == "__main__":
         for idx, d in enumerate(dones):
             if d:
                 real_next_obs[idx] = infos[idx]["terminal_observation"]
+        # Remove infos argument as PRB add method doesn't utilize it
         rb.add(obs, real_next_obs, actions, rewards, dones)
-        #rb.add(obs, real_next_obs, actions, rewards, dones, infos)
+        # rb.add(obs, real_next_obs, actions, rewards, dones, infos)
 
         # TRY NOT TO MODIFY: CRUCIAL step easy to overlook
         obs = next_obs
@@ -223,14 +216,7 @@ if __name__ == "__main__":
         # ALGO LOGIC: training.
         if global_step > args.learning_starts:
             if global_step % args.train_frequency == 0:
-                data = rb.sample(args.batch_size)
-
-                #Calculate importance-sampling weight and update weights
-                if rb.full:
-                    buffer_size = rb.buffer_size
-                else:
-                    buffer_size = rb.pos
-                new_weights = ((buffer_size * (rb._it_sum._value[data.indices] + .00001)) ** -rb._beta) / rb._max_weight
+                data = rb.sample(args.batch_size, 0.4)
 
                 with torch.no_grad():
                     target_max, _ = target_network(data.next_observations).max(dim=1)
@@ -238,7 +224,11 @@ if __name__ == "__main__":
                 old_val = q_network(data.observations).gather(1, data.actions).squeeze()
                 loss = F.mse_loss(td_target, old_val)
 
-                rb.update_weights(data.indices, new_weights)
+                #Update transition priority
+                transition_priorities = torch.abs(td_target - old_val).detach().cpu().numpy() + 1e-5
+                rb.update_weights(data.indices, transition_priorities)
+
+                #rb.update_weights(data.indices, new_weights)
 
                 if global_step % 100 == 0:
                     writer.add_scalar("losses/td_loss", loss, global_step)

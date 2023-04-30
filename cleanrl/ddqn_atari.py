@@ -162,12 +162,9 @@ if __name__ == "__main__":
     envs = gym.vector.SyncVectorEnv([make_env(args.env_id, args.seed, 0, args.capture_video, run_name)])
     assert isinstance(envs.single_action_space, gym.spaces.Discrete), "only discrete action space is supported"
 
-    #Network initializtion. q_network is the online network
     q_network = QNetwork(envs).to(device)
     optimizer = optim.Adam(q_network.parameters(), lr=args.learning_rate)
     target_network = QNetwork(envs).to(device)
-    ## LOAD CHECKPOINT IF DESIRED
-    #q_network.load_state_dict(torch.load('ddqn_atari.cleanrl_model'))
     target_network.load_state_dict(q_network.state_dict())
 
     rb = ReplayBuffer(

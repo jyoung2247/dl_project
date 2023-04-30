@@ -20,6 +20,7 @@ from stable_baselines3.common.atari_wrappers import (
 )
 from cleanrl_utils.buffers import PrioritizedReplayBuffer
 from torch.utils.tensorboard import SummaryWriter
+import math
 
 
 def parse_args():
@@ -108,7 +109,7 @@ def make_env(env_id, seed, idx, capture_video, run_name):
 class QNetwork(nn.Module):
     def __init__(self, env):
         super().__init__()
-        self.network = nn.Sequential(
+        self.base_network = nn.Sequential(
             nn.Conv2d(4, 32, 8, stride=4),
             nn.ReLU(),
             nn.Conv2d(32, 64, 4, stride=2),
@@ -117,13 +118,49 @@ class QNetwork(nn.Module):
             nn.ReLU(),
             nn.Flatten(),
             nn.Linear(3136, 512),
-            nn.ReLU(),
-            nn.Linear(512, env.single_action_space.n),
+            nn.ReLU()
         )
+        #Add noisy layer
+        self.noisy = NoisyLayer(512, 128)
+        self.relu = nn.ReLU()
+        #Calculate advantage and value for dueling DQN
+        self.advantage = NoisyLayer(128, env.single_action_space.n)
+        self.value = nn.Linear(128, 1)
 
     def forward(self, x):
-        return self.network(x / 255.0)
+        x = self.base_network(x / 255.0)
+        x = self.noisy(x)
+        x = self.relu(x)
+        value = self.value(x)
+        advantage = self.advantage(x)
+        advantage_avg = torch.mean(advantage, dim=1, keepdim=True)
+        return value + advantage - advantage_avg
 
+#Remove linear_schedule since noisy DQN doesn't utilize it
+# def linear_schedule(start_e: float, end_e: float, duration: int, t: int):
+#     slope = (end_e - start_e) / duration
+#     return max(slope * t + start_e, end_e)
+
+#Implementation for Noisy DQN
+class NoisyLayer(nn.Linear):
+    def __init__(self, in_features, out_features, sigma_init=0.017):
+        super().__init__(in_features, out_features)
+        self.sigma_weight = nn.Parameter(torch.Tensor(out_features, in_features).fill_(sigma_init))
+        self.sigma_bias = nn.Parameter(torch.Tensor(out_features).fill_(sigma_init))
+        self.register_buffer("epsilon_weight", torch.zeros((out_features, in_features)))
+        self.register_buffer("epsilon_bias", torch.zeros(out_features))
+        mu_init = math.sqrt(3 / in_features)
+        nn.init.uniform_(self.weight, -mu_init, mu_init)
+        nn.init.uniform_(self.bias, -mu_init, mu_init)
+
+    def forward(self, input):
+        # initialize epsilon noise each replay step:
+        torch.randn(self.epsilon_weight.size(), out=self.epsilon_weight)
+        torch.randn(self.epsilon_bias.size(), out=self.epsilon_bias)
+
+        weight = self.weight + self.sigma_weight * self.epsilon_weight
+        bias = self.bias + self.sigma_bias * self.epsilon_bias
+        return F.linear(input, weight, bias)
 
 def linear_schedule(start_e: float, end_e: float, duration: int, t: int):
     slope = (end_e - start_e) / duration
@@ -162,19 +199,15 @@ if __name__ == "__main__":
     envs = gym.vector.SyncVectorEnv([make_env(args.env_id, args.seed, 0, args.capture_video, run_name)])
     assert isinstance(envs.single_action_space, gym.spaces.Discrete), "only discrete action space is supported"
 
-    #Network initializtion. q_network is the online network
     q_network = QNetwork(envs).to(device)
     optimizer = optim.Adam(q_network.parameters(), lr=args.learning_rate)
     target_network = QNetwork(envs).to(device)
-    ## LOAD CHECKPOINT IF DESIRED
-    #q_network.load_state_dict(torch.load('ddqn_atari.cleanrl_model'))
     target_network.load_state_dict(q_network.state_dict())
 
     #Initialize PRB
     rb = PrioritizedReplayBuffer(
         args.buffer_size,
         0.5,
-        0.4,
         envs.single_observation_space,
         envs.single_action_space,
         device
@@ -185,12 +218,14 @@ if __name__ == "__main__":
     obs = envs.reset()
     for global_step in range(args.total_timesteps):
         # ALGO LOGIC: put action logic here
-        epsilon = linear_schedule(args.start_e, args.end_e, args.exploration_fraction * args.total_timesteps, global_step)
-        if random.random() < epsilon:
-            actions = np.array([envs.single_action_space.sample() for _ in range(envs.num_envs)])
-        else:
-            q_values = q_network(torch.Tensor(obs).to(device))
-            actions = torch.argmax(q_values, dim=1).cpu().numpy()
+        # ALGO LOGIC: put action logic here
+        # Remove scheduling with epsilon since noisy DQN replaces this
+        # epsilon = linear_schedule(args.start_e, args.end_e, args.exploration_fraction * args.total_timesteps, global_step)
+        # if random.random() < epsilon:
+        #     actions = np.array([envs.single_action_space.sample() for _ in range(envs.num_envs)])
+        # else:
+        q_values = q_network(torch.Tensor(obs).to(device))
+        actions = torch.argmax(q_values, dim=1).cpu().numpy()
 
         # TRY NOT TO MODIFY: execute the game and log data.
         next_obs, rewards, dones, infos = envs.step(actions)
@@ -201,7 +236,7 @@ if __name__ == "__main__":
                 print(f"global_step={global_step}, episodic_return={info['episode']['r']}")
                 writer.add_scalar("charts/episodic_return", info["episode"]["r"], global_step)
                 writer.add_scalar("charts/episodic_length", info["episode"]["l"], global_step)
-                writer.add_scalar("charts/epsilon", epsilon, global_step)
+                # writer.add_scalar("charts/epsilon", epsilon, global_step)
                 break
 
         # TRY NOT TO MODIFY: save data to reply buffer; handle `terminal_observation`
@@ -209,7 +244,9 @@ if __name__ == "__main__":
         for idx, d in enumerate(dones):
             if d:
                 real_next_obs[idx] = infos[idx]["terminal_observation"]
+        # Remove infos argument as PRB add method doesn't utilize it
         rb.add(obs, real_next_obs, actions, rewards, dones)
+        # rb.add(obs, real_next_obs, actions, rewards, dones, infos)
 
         # TRY NOT TO MODIFY: CRUCIAL step easy to overlook
         obs = next_obs
@@ -217,14 +254,8 @@ if __name__ == "__main__":
         # ALGO LOGIC: training.
         if global_step > args.learning_starts:
             if global_step % args.train_frequency == 0:
-                data = rb.sample(args.batch_size)
-
-                #Calculate importance-sampling weight and update weights
-                if rb.full:
-                    buffer_size = rb.buffer_size
-                else:
-                    buffer_size = rb.pos
-                new_weights = ((buffer_size * (rb._it_sum._value[data.indices] + .00001)) ** -rb._beta) / rb._max_weight
+                #Add beta argument to rb.sample
+                data = rb.sample(args.batch_size, 0.4)
 
                 with torch.no_grad():
                     ##Implement Double Deep Q Learning
@@ -232,10 +263,12 @@ if __name__ == "__main__":
                     best_actions = next_state_Q.argmax(dim=1, keepdims=True)
                     next_Q = target_network(data.next_observations).gather(1, best_actions).squeeze()
                     td_target = data.rewards.flatten() + args.gamma * next_Q * (1 - data.dones.flatten())
-                    #target_max, _ = target_network(data.next_observations).max(dim=1)
-                    # td_target = data.rewards.flatten() + args.gamma * target_max * (1 - data.dones.flatten())
                 old_val = q_network(data.observations).gather(1, data.actions).squeeze()
                 loss = F.mse_loss(td_target, old_val)
+
+                #Update transition priority
+                transition_priorities = torch.abs(td_target - old_val).detach().cpu().numpy() + 1e-5
+                rb.update_weights(data.indices, transition_priorities)
 
                 if global_step % 100 == 0:
                     writer.add_scalar("losses/td_loss", loss, global_step)

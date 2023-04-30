@@ -124,11 +124,8 @@ class SumSegmentTree(SegmentTree):
         """
         if isinstance(prefixsum, float):
             prefixsum = np.array([prefixsum])
-        if (np.max(prefixsum) >= self.sum() + 1e-5):
-            print("failed assert, diff = ", np.max(prefixsum) - self.sum())
-            
         assert 0 <= np.min(prefixsum)
-        assert np.max(prefixsum) <= self.sum() + 5
+        assert np.max(prefixsum) <= self.sum() + 1e-5
         assert isinstance(prefixsum[0], float)
 
         idx = np.ones(len(prefixsum), dtype=int)
@@ -603,7 +600,6 @@ class PrioritizedReplayBuffer(BaseBuffer):
         self,
         buffer_size: int,
         alpha: float,
-        beta: float,
         observation_space: spaces.Space,
         action_space: spaces.Space,
         device: Union[th.device, str] = "cpu",
@@ -624,7 +620,6 @@ class PrioritizedReplayBuffer(BaseBuffer):
         while it_capacity < buffer_size:
             it_capacity *= 2
         self._alpha = alpha
-        self._beta = beta
         self._it_sum = SumSegmentTree(it_capacity)
         self._it_min = MinSegmentTree(it_capacity)
         self._max_weight = 1.0
@@ -659,7 +654,7 @@ class PrioritizedReplayBuffer(BaseBuffer):
 
         return data
 
-    def sample(self, batch_size: int, env: Optional[VecNormalize] = None) -> ReplayBufferSamples:
+    def sample(self, batch_size: int, beta: float, env: Optional[VecNormalize] = None) -> ReplayBufferSamples:
         """
         Sample elements from the replay buffer using priorization.
 
@@ -678,9 +673,9 @@ class PrioritizedReplayBuffer(BaseBuffer):
         th_data = self._get_samples(batch_inds, env=env)
 
         p_min = self._it_min.min() / self._it_sum.sum()
-        max_weight = (p_min * self.size()) ** (-self._beta)
+        max_weight = (p_min * self.size()) ** (-beta)
         p_sample = self._it_sum[batch_inds] / self._it_sum.sum()
-        weights = (p_sample * self.size()) ** (-self._beta) / max_weight
+        weights = (p_sample * self.size()) ** (-beta) / max_weight
 
         return PrioritizedReplayBufferSamples(*tuple(map(self.to_torch, th_data)), weights=weights, indices=batch_inds)
 

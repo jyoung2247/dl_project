@@ -13,8 +13,7 @@ Citation for CleanRL:https://github.com/vwxyzjn/cleanrl
   url     = {http://jmlr.org/papers/v23/21-1342.html}
 }
 
-All code is directly copied from CleanRL commit a39f21fdd06ecc6227b197b2e24245073e5675fa except the files PER_dqn_atari.py, combo_dqn.py, combo_dqn_atari.py, 
-ddqn.py , ddqn_atari.py, dueling_dqn.py, dueling_dqn_atari.py, noisy_dqn.py, and noisy_dqn_atari.py
+All code is directly copied from CleanRL commit a39f21fdd06ecc6227b197b2e24245073e5675fa except the files in cleanrl/modified_algorithms
 
 Conda environment setup:
 

@@ -1,6 +1,6 @@
 # dl_project
 
-Citation for CleanRL:
+Citation for CleanRL:https://github.com/vwxyzjn/cleanrl
 
 @article{huang2022cleanrl,
   author  = {Shengyi Huang and Rousslan Fernand Julien Dossa and Chang Ye and Jeff Braga and Dipam Chakraborty and Kinal Mehta and João G.M. Araújo},
@@ -12,6 +12,9 @@ Citation for CleanRL:
   pages   = {1--18},
   url     = {http://jmlr.org/papers/v23/21-1342.html}
 }
+
+All code is directly copied from CleanRL commit a39f21fdd06ecc6227b197b2e24245073e5675fa except the files PER_dqn_atari.py, combo_dqn.py, combo_dqn_atari.py, 
+ddqn.py , ddqn_atari.py, dueling_dqn.py, dueling_dqn_atari.py, noisy_dqn.py, and noisy_dqn_atari.py
 
 Conda environment setup:
 

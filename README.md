@@ -1,6 +1,6 @@
 # dl_project
 
-Citation for CleanRL:
+Citation for CleanRL:https://github.com/vwxyzjn/cleanrl
 
 @article{huang2022cleanrl,
   author  = {Shengyi Huang and Rousslan Fernand Julien Dossa and Chang Ye and Jeff Braga and Dipam Chakraborty and Kinal Mehta and João G.M. Araújo},
@@ -12,6 +12,8 @@ Citation for CleanRL:
   pages   = {1--18},
   url     = {http://jmlr.org/papers/v23/21-1342.html}
 }
+
+All code is directly copied from CleanRL commit a39f21fdd06ecc6227b197b2e24245073e5675fa except the files in cleanrl/modified_algorithms, excluding cleanrl/modified_algorithms/cleanrl_utils which was also copied from cleanrl.
 
 Conda environment setup:
 

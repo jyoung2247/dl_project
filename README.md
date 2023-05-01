@@ -13,7 +13,7 @@ Citation for CleanRL:https://github.com/vwxyzjn/cleanrl
   url     = {http://jmlr.org/papers/v23/21-1342.html}
 }
 
-All code is directly copied from CleanRL commit a39f21fdd06ecc6227b197b2e24245073e5675fa except the files in cleanrl/modified_algorithms
+All code is directly copied from CleanRL commit a39f21fdd06ecc6227b197b2e24245073e5675fa except the files in cleanrl/modified_algorithms, excluding cleanrl/modified_algorithms/cleanrl_utils which was also copied from the cleanrl.
 
 Conda environment setup:
 
